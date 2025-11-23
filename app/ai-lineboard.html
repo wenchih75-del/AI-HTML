@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 線稿生成器</title>
+    <!-- 載入 Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 載入 Inter 字體 (Tailwind 預設) */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* 簡單的載入中旋轉動畫 */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            width: 1.5rem;
+            height: 1.5rem;
+            animation: spin 1s linear infinite;
+        }
+        /* 隱藏預設的檔案上傳按鈕 */
+        #image-upload {
+            display: none;
+        }
+        /* 自訂 range slider 樣式 */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #d1d5db; /* gray-300 */
+            border-radius: 9999px;
+            outline: none;
+            opacity: 0.9;
+            transition: opacity .2s;
+        }
+        input[type="range"]:hover {
+            opacity: 1;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6; /* blue-500 */
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6; /* blue-500 */
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        /* 黑板模式的反轉濾鏡 */
+        .inverted-image {
+            filter: invert(1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white w-full max-w-2xl p-6 sm:p-8 rounded-2xl shadow-xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">
+            AI 圖像線稿生成器
+        </h1>
+
+        <div class="space-y-6">
+            <!-- 1. 圖片上傳 --><div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">1. 上傳圖片</label>
+                <label id="image-upload-label" for="image-upload" class="cursor-pointer bg-blue-500 text-white text-center py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors duration-200 block w-full">
+                    選擇檔案
+                </label>
+                <input type="file" id="image-upload" accept="image/*">
+                
+                <!-- 圖片預覽 --><div id="image-preview" class="mt-4 w-full min-h-[200px] bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-500 overflow-hidden">
+                    <span>圖片預覽區</span>
+                </div>
+            </div>
+
+            <!-- 2. 生成選項 --><div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">2. 選擇模式</label>
+                <div class="flex items-center space-x-6">
+                    <!-- 模式一：考試用黑白線稿 --><div class="flex items-center">
+                        <input id="mode-exam" name="mode" type="radio" value="exam" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300" checked>
+                        <label for="mode-exam" class="ml-2 block text-sm text-gray-900">
+                            考試用黑白線稿 (白底黑線)
+                        </label>
+                    </div>
+                    <!-- 模式二：黑板模式 --><div class="flex items-center">
+                        <input id="mode-blackboard" name="mode" type="radio" value="blackboard" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300">
+                        <label for="mode-blackboard" class="ml-2 block text-sm text-gray-900">
+                            黑板模式 (黑底白線)
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 線條設定 --><div class="space-y-4">
+                <!-- 線條種類 --><div>
+                    <label for="line-style" class="block text-sm font-medium text-gray-700">3. 線條種類</label>
+                    <select id="line-style" name="line-style" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        <option value="crayon">粉蠟筆 (簡約, 更粗)</option>
+                        <option value="marker" selected>簽字筆 (漫畫, 更粗)</option>
+                        <option value="sketch">素描 (細膩, 更粗)</option>
+                    </select>
+                </div>
+                
+                <!-- 精細度 --><div>
+                    <div class="flex justify-between items-center">
+                        <label for="detail-level" class="block text-sm font-medium text-gray-700">4. 精細度</label>
+                        <span id="detail-value" class="text-sm font-medium text-blue-600">50</span>
+                    </div>
+                    <!-- 
+                        *** HTML 修改處 ***
+                        min 改為 "0"
+                        step 改為 "10"
+                    -->
+                    <input id="detail-level" type="range" min="0" max="100" value="50" step="10" class="mt-1 w-full">
+                </div>
+            </div>
+
+            <!-- 4. 生成按鈕 --><button id="generate-btn" class="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-3 disabled:bg-gray-400">
+                <span id="btn-text">生成圖片</span>
+                <div id="loading-spinner" class="spinner hidden"></div>
+            </button>
+
+            <!-- 5. 錯誤訊息框 --><div id="message-box" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert">
+                <!-- 錯誤訊息將顯示在這裡 --></div>
+
+            <!-- 6. 結果顯示 --><div>
+                <h2 class="text-xl font-semibold text-gray-800 mb-3">生成結果</h2>
+                <div id="result-container" class="w-full min-h-[200px] bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-center text-gray-500 overflow-hidden">
+                    <img id="result-image" src="" alt="生成結果" class="hidden max-w-full h-auto">
+                    <span id="result-placeholder">...</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="module">
+        // Gemini API 設定
+        const apiKey = ""; // 將 API 金鑰留空，Canvas 環境會自動提供
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+
+        // 儲存上傳圖片的資料
+        let base64ImageData = null;
+        let uploadedMimeType = null;
+
+        // 獲取 DOM 元素
+        const imageUpload = document.getElementById('image-upload');
+        const imagePreview = document.getElementById('image-preview');
+        const detailSlider = document.getElementById('detail-level');
+        const detailValue = document.getElementById('detail-value');
+        const generateBtn = document.getElementById('generate-btn');
+        const btnText = document.getElementById('btn-text');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const messageBox = document.getElementById('message-box');
+        const resultImage = document.getElementById('result-image');
+        const resultPlaceholder = document.getElementById('result-placeholder');
+        const modeBlackboard = document.getElementById('mode-blackboard'); // 新增黑板模式元素
+
+        // --- 事件監聽 ---
+
+        // 監聽圖片上傳
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            
+            // 檢查檔案類型
+            if (!file.type.startsWith('image/')) {
+                showMessage('請上傳圖片檔案 (例如 JPG, PNG, WEBP)。');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                // 顯示預覽
+                imagePreview.innerHTML = `<img src="${dataUrl}" alt="圖片預覽" class="max-w-full max-h-[400px] h-auto rounded-lg">`;
+                
+                // 儲存 base64 資料和 MIME 類型
+                const parts = dataUrl.split(',');
+                uploadedMimeType = parts[0].split(':')[1].split(';')[0]; // e.g., "image/png"
+                base64ImageData = parts[1];
+                
+                showMessage('', true); // 清除舊錯誤
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // 監聽精細度拉桿
+        detailSlider.addEventListener('input', (event) => {
+            detailValue.textContent = event.target.value;
+        });
+
+        // 監聽生成按鈕點擊
+        generateBtn.addEventListener('click', generateImage);
+
+        // --- 核心功能 ---
+
+        /**
+         * 顯示訊息或錯誤
+         * @param {string} message - 要顯示的訊息
+         * @param {boolean} [hide=false] - 是否強制隱藏
+         */
+        function showMessage(message, hide = false) {
+            if (hide) {
+                messageBox.classList.add('hidden');
+                messageBox.textContent = '';
+            } else {
+                messageBox.textContent = message;
+                messageBox.classList.remove('hidden');
+            }
+        }
+        
+        /**
+         * 設置 UI 為載入中狀態
+         * @param {boolean} isLoading - 是否正在載入
+         */
+        function setLoadingState(isLoading) {
+            if (isLoading) {
+                generateBtn.disabled = true;
+                btnText.textContent = '生成中...';
+                loadingSpinner.classList.remove('hidden');
+                showMessage('', true); // 隱藏錯誤訊息
+                resultPlaceholder.textContent = '圖片生成中，請稍候...';
+                resultImage.classList.add('hidden');
+                // 移除反轉濾鏡，確保預覽圖是正常顯示
+                resultImage.classList.remove('inverted-image'); 
+            } else {
+                generateBtn.disabled = false;
+                btnText.textContent = '生成圖片';
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+
+        /**
+         * 建立提示詞 (Prompt)
+         * @returns {string} - 給 AI 的文字提示詞
+         */
+        function buildPrompt() {
+            // 獲取 UI 選項
+            const lineStyle = document.getElementById('line-style').value;
+
+            // --- *** JavaScript 修改處 *** ---
+            // 獲取原始值 (可能是 "0")
+            const rawDetailValue = document.getElementById('detail-level').value;
+            // 如果是 "0"，則在傳送給 API 時改為 "1"
+            const detailLevel = (rawDetailValue === "0") ? "1" : rawDetailValue;
+            // -------------------------------
+            
+            // 注意：黑板模式不再影響提示詞的顏色，只影響前端濾鏡
+            // const isBlackboard = document.getElementById('mode-blackboard').checked; 
+
+            let styleDescription = "";
+            switch (lineStyle) {
+                case 'crayon':
+                    styleDescription = "風格：簡約且非常粗的黑色粉蠟筆線條（僅黑白灰階），筆觸寬度約為正常線稿的2倍。 (Style: simple, very thick black crayon lines (black and white grayscale only), stroke width approximately 2 times normal line art.)";
+                    break;
+                case 'marker':
+                    styleDescription = "風格：漫畫感的黑色簽字筆線稿（僅黑白灰階），線條明顯更粗，保留主要特徵與中等細節，筆觸寬度約為正常線稿的2倍。 (Style: manga-style black marker line art (black and white grayscale only), significantly thicker lines, retaining main features and medium detail, stroke width approximately 2 times normal line art.)";
+                    break;
+                case 'sketch':
+                    styleDescription = "風格：細膩但筆觸更為粗實的鉛筆素描筆觸（僅黑白灰階），線條寬度約為正常線稿的2倍，確保線條清晰且完整。 (Style: fine but bolder pencil sketch strokes (black/white/grayscale only), line width approximately 2 times normal line art, ensuring clear and complete lines.)";
+                    break;
+            }
+
+            // 無論何種模式，Gemini API 總是生成黑線白底的圖片
+            const colorDescription = "顏色：嚴格的黑白灰階。 (Color: strictly black, white, and grayscale only.)";
+
+            // 組合提示詞，加入忽略背景細節的指示
+            return `
+                請根據這張圖片生成一張**嚴格的黑白灰階**線稿圖。
+                ${styleDescription}
+                精細度：${detailLevel}/100。請忽略圖片中不重要的背景細節，將重點放在主要物體或人物的線條上。 (Detail Level: ${detailLevel}/100. Please ignore unimportant background details in the image, focusing on the lines of the main object or person.)
+                ${colorDescription}
+                最終圖片**絕對**必須是嚴格的黑白或灰階。 **禁止使用任何色彩**。 絕對不可包含任何彩色（例如紅色、藍色、綠色、黃色等）。不可包含任何文字。確保所有線條都非常清晰且可見。
+                (The final image **ABSOLUTELY MUST** be strictly black, white, or grayscale. **ALL COLOR IS PROHIBITED**. It MUST NOT contain any color (e.g., red, blue, green, yellow, etc.) whatsoever. It must not contain any text. Ensure all lines are very clear and visible.)
+            `.trim();
+        }
+
+        /**
+         * 呼叫 API 並處理重試 (Exponential Backoff)
+         * @param {number} maxRetries - 最大重試次數
+         */
+        async function fetchWithRetry(maxRetries = 3) {
+            const prompt = buildPrompt();
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inlineData: { mimeType: uploadedMimeType, data: base64ImageData } }
+                    ]
+                }],
+                generationConfig: {
+                    responseModalities: ['IMAGE'] // 我們只需要圖片
+                },
+            };
+
+            let retries = 0;
+            let delay = 1000; // 初始延遲 1 秒
+
+            while (retries < maxRetries) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        return await response.json(); // G, 
+                    }
+                    
+                    //  API  429 (Too Many Requests)  50x (Server Error)，
+                    if (response.status === 429 || response.status >= 500) {
+                        // console.log(`Retry ${retries + 1}/${maxRetries} after ${delay}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // 
+                        retries++;
+                    } else {
+                        //  ( 400)，
+                        const errorResult = await response.json();
+                        throw new Error(errorResult.error?.message || `HTTP 錯誤： ${response.status}`);
+                    }
+                } catch (error) {
+                    // 
+                    if (retries < maxRetries - 1) {
+                        // console.log(`Network error. Retry ${retries + 1}/${maxRetries} after ${delay}ms...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2;
+                        retries++;
+                    } else {
+                        // 
+                        throw error;
+                    }
+                }
+            }
+            
+            throw new Error('已達最大重試次數，API 請求失敗。');
+        }
+
+
+        /**
+         * 主函數：生成圖片
+         */
+        async function generateImage() {
+            // 1. 驗證
+            if (!base64ImageData || !uploadedMimeType) {
+                showMessage('請先上傳一張圖片。');
+                return;
+            }
+
+            // 2. 設置載入狀態
+            setLoadingState(true);
+
+            try {
+                // 3. 呼叫 API (包含重試)
+                const result = await fetchWithRetry();
+
+                // 4. 解析回應
+                // 尋找 inlineData.data
+                const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+                if (base64Data) {
+                    // 5. 成功：顯示圖片
+                    const imageUrl = `data:image/png;base64,${base64Data}`; // Gemini 圖片模型通常回傳 PNG
+                    resultImage.src = imageUrl;
+                    resultImage.classList.remove('hidden');
+                    resultPlaceholder.textContent = ''; // 清空佔位符
+
+                    // 檢查是否為黑板模式，如果是則添加反轉濾鏡
+                    if (modeBlackboard.checked) {
+                        resultImage.classList.add('inverted-image');
+                    } else {
+                        resultImage.classList.remove('inverted-image');
+                    }
+
+                } else {
+                    // 6. 失敗：處理 API 回傳的錯誤
+                    // 檢查是否有安全阻擋或其他原因
+                    const finishReason = result?.candidates?.[0]?.finishReason;
+                    let errorMsg = "生成失敗：未收到圖片資料。";
+                    if (finishReason === "SAFETY") {
+                        errorMsg = "生成失敗：內容可能違反了安全政策。";
+                    } else if (result.error) {
+                        errorMsg = `生成失敗：${result.error.message}`;
+                    } else if (finishReason) {
+                        errorMsg = `生成失敗：${finishReason}`;
+                    }
+                    showMessage(errorMsg);
+                    resultPlaceholder.textContent = '...'; // 重置佔位符
+                }
+            } catch (error) {
+                // 7. 失敗：處理網路或重試錯誤
+                console.error('Error generating image:', error);
+                showMessage(`發生錯誤：${error.message}`);
+                resultPlaceholder.textContent = '...'; // 重置佔位符
+            } finally {
+                // 8. 結束載入狀態
+                setLoadingState(false);
+            }
+        }
+
+    </script>
+</body>
+</html>
