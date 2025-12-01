@@ -564,7 +564,7 @@
                                 <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full whitespace-nowrap">
                                     {mode === 'teaching' ? '教學模式' : mode === 'flashcard' ? '抽認模式' : '抽填模式'}
                                 </span>
-                                {mode === 'teaching' && <span>分數展示</span>}
+                                {mode === 'teaching' && <span className="flex items-center gap-2">分數展示：{getFractionText()}</span>}
                                 {mode === 'flashcard' && (
                                     <span className="flex items-center gap-2">
                                         請回答：圖中有多少？
